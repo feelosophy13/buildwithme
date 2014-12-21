@@ -1,0 +1,46 @@
+.largeFontSize {
+  font-size: 17.5px;
+}
+
+a:hover .noLinkDec {
+	text-decoration: none;
+	color: black;	
+}
+
+#navbar-greeting {
+	float: right;
+	height: 50px;
+	padding: 15px 15px;
+	font-size: 18px;
+	color: white;
+	line-height: 20px;
+	margin: 0;
+}
+
+input.word_countdown {
+	text-align: center;
+}
+
+blockquote.commentBoxes {
+	border-left: 7px solid #eee;
+	border-bottom: 1px solid #eee;
+	border-top: 2px solid #eee;
+	border-right: 1px solid #eee;
+}
+
+a.like {
+	background-color: #3b3c3b;
+	color: #fff;
+	text-decoration: none;
+	padding: 2px 6px 2px 6px;
+	border-radius: 5px;
+	border: 1px solid #000;
+	float: right;
+	height: 21px;
+	font-size: 12px;
+}
+
+h3.panel-title {
+	width: 80%;
+	margin: 0 auto;
+}
