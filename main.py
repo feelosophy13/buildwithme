@@ -13,7 +13,7 @@ import datetime
 import pytz
 
 from beaker.middleware import SessionMiddleware
-from helpers import create_permalink, validate_newpost, validate_passwords, validate_signup, validate_profile_update, validate_message, send_email, extract_tags, format_newlines, make_rand_str
+from helpers import create_permalink, validate_newpost, validate_passwords, validate_signup, validate_profile_update, validate_message, validate_content, send_email, extract_tags, format_newlines, make_rand_str
 
 
 
@@ -21,7 +21,7 @@ from helpers import create_permalink, validate_newpost, validate_passwords, vali
 def test():
     cookie = bottle.request.get_cookie("session")
     userID, firstname = sessions.get_userID_firstname(cookie)
-    return bottle.template('test')
+    return bottle.template('posts_grid_display2')
 
 
 @bottle.post('/test')
@@ -41,41 +41,6 @@ def test():
     
     return bottle.template('test')
     
-
-@bottle.post('/newfeedback')
-def post_feedback():
-    cookie = bottle.request.get_cookie("session")
-    userID, firstname = sessions.get_userID_firstname(cookie)
-
-    feedbackContent = bottle.request.forms.get("feedbackContent")  # will be escaped later (after the body length has been verified)
-    permalink = bottle.request.forms.get("permalink"); permalink = cgi.escape(permalink)
-    post = posts.get_post_by_permalink(permalink)
-
-    if userID is None:  # if user is not logged in (possible hack attempt)
-        bottle.redirect('/login')
-    if post is None:  # if post not found (possible hack attempt)
-        bottle.redirect("/post_not_found")
-
-    error = {}
-    
-    if validate_feedback(feedbackContent, error):
-        feedbackContent = cgi.escape(feedbackContent, quote=True).strip()
-        feedbackContent = format_newline(feedbackContent)
-        feedback_inserted = feedbacks.insert_feedback(permalink, firstname, userID, feedbackContent)
-        if feedback_inserted:
-            feedback_count_incremented = posts.increment_feedback_count(permalink)         
-            if feedback_count_incremented:
-                return True
-            else:  # should try again; for now, just pass
-                pass                
-        bottle.redirect("/post/" + permalink)
-    else:
-        feedback = {'b': ""}
-        error = "What are you doing? No funny business is allowed here!"
-        return bottle.template("entry_template", 
-                               dict(userID = userID, firstname = firstname,
-                                    error = error, post = post, feedback = feedback))
-
 
 """
 @bottle.route('/<page_num:int>')
@@ -99,14 +64,43 @@ def main_page(page_num = 1):  # by default, page_num = 1
 """
 
 
-
 @bottle.route('/edit_post')
 def edit_post():
     cookie = bottle.request.get_cookie("session")
     userID = sessions.get_userID(cookie) 
     return "AY!"
 
+
+
+##### TO-DO
+# category of posts (education, legal, technology, mobile, gaming, etc.)
+# list of previous ideas (take notes from CL)
+# edit-post function
+# edit/upload profile image function
+# profile image upload
+
+# Like/unlike JS issue
+
+
+
+
+
+####### BELOW FUNCTIONS ARE COMPLETE #######
+@bottle.get('/manage_posts')
+def manage_posts():
+    cookie = bottle.request.get_cookie("session")
+    userID, firstname = sessions.get_userID_firstname(cookie)
     
+    if userID is None:
+        bottle.redirect('/')
+        
+    my_posts_summaries = posts.get_post_summaries_by_userID(userID)
+    
+    return bottle.template("manage_posts",
+                           dict(userID = userID, firstname = firstname,
+                                summaries = my_posts_summaries))
+
+
 @bottle.route('/liked_ideas')
 def display_liked_ideas():
     cookie = bottle.request.get_cookie("session")
@@ -116,31 +110,47 @@ def display_liked_ideas():
     liked_posts = []
     for permalink in liked_posts_permalinks:
         post = posts.get_post_by_permalink(permalink)
+        post['i'] = str(userID)  # "i" for interested userIDs (or "likerIDs")
         liked_posts.append(post)
-        
-    print liked_posts
 
-    return bottle.template('posts_grid_display', 
+    return bottle.template('liked_posts', 
                            dict(userID = userID, firstname = firstname,
                                 posts = liked_posts))
 
 
+@bottle.post('/newfeedback')
+def post_feedback():
+    cookie = bottle.request.get_cookie("session")
+    userID, firstname = sessions.get_userID_firstname(cookie)
+
+    feedbackContent = bottle.request.forms.get("feedbackContent")  # will be escaped later (after the body length has been verified)
+    permalink = bottle.request.forms.get("permalink"); permalink = cgi.escape(permalink)
+    post = posts.get_post_by_permalink(permalink)
+
+    if userID is None:  # if user is not logged in (possible hack attempt)
+        bottle.redirect('/login')
+    if post is None:  # if post not found (possible hack attempt)
+        bottle.redirect("/post_not_found")
+
+    if validate_content(content = feedbackContent, max_char_len = 1000, optional = False):
+        feedbackContent = cgi.escape(feedbackContent, quote=True).strip()
+        feedbackContent = format_newlines(feedbackContent)
+        feedback_inserted = feedbacks.insert_feedback(permalink, firstname, userID, feedbackContent)
+        if feedback_inserted:
+            feedback_count_incremented = posts.increment_feedback_count(permalink)         
+            if feedback_count_incremented:
+                bottle.redirect("/post/" + permalink)
+            else:  # we should try incrementing the count again; for now, just pass
+                error = "Sorry, something went wrong."
+                bottle.redirect('/internal_error')
+
+    else:
+        error = "What are you doing? No funny business is allowed here!"
+    return bottle.template("entry_template", 
+                            dict(userID = userID, firstname = firstname,
+                                error = error, post = post, feedbackContent = ""))
 
 
-##### TO-DO
-# 5. Clean up newfeedback()
-# 8. Fix liked posts page
-# 9. Like/unlike JS issue
-
-# 11. profile image upload
-# 12. Contact us and "Terms and Conditions" pages in the "How We Work" page
-# 13. Post grid display in boxes
-
-
-    
-    
-
-####### BELOW FUNCTIONS ARE COMPLETE #######
 @bottle.get('/confirm_signup/<conf_str_url>')
 def confirm_signup(conf_str_url):
     cookie = bottle.request.get_cookie("session")
@@ -317,18 +327,18 @@ def like():
         return
     if like:  # if user already liked the post
         print "You already liked this post!"
-        return False
+        return 'already liked'
     
    ## process a like
     like_logged = likes.log_like(userID, permalink)
     if like_logged:  # only if like was logged, increment the like count
         likes_count_incremented = posts.increment_likes_count(permalink)
         if likes_count_incremented:
+            print "like logged and count incremented!"
             return 'success'
         else:  # if there was an error incrementing the like count 
-            # should try again; for now, just remove the like log and throw an error
-            likes.remove_like(userID, permalink)
-            return False              
+            # should try again; for now, just throw an error and move on
+            return False  # there was an error incrementing the likes count
     else:
         return False  # there was an error logging the like
 
@@ -346,18 +356,19 @@ def unlike():
         return
     if not like:  # if there is no like to unlike
         print "There is no like to remove!"
-        return False
+        return 'already unliked'
 
     ## process an unlike
-    like_removed, likeID = likes.remove_like(userID, permalink)
+    print "SHIT"
+    like_removed = likes.remove_like(userID, permalink)    
     if like_removed:  # only if like log was removed, decrement the like count
         likes_count_decremented = posts.decrement_likes_count(permalink)
         if likes_count_decremented:
+            print "like removed and count decremented!"
             return 'success'
         else:  # if there was an error decrementing the like count
-            # should try again; for now just, restore the like log and throw and error
-            likes.restore_like(likeID, userID, permalink)
-            return False
+            # should try again; for now just, throw an error and move on
+            return False  # there was an error decrementing the likes count
     else: 
         return False  # there was an error removing the like
 
@@ -402,7 +413,8 @@ def change_password():
 def main_page():
     cookie = bottle.request.get_cookie("session")
     userID, firstname = sessions.get_userID_firstname(cookie) 
-    latest_posts = posts.get_posts(10, 1)
+    latest_posts = posts.get_posts(10, 1, likes)
+
     return bottle.template('main', 
                            dict(userID = userID, firstname = firstname, posts = latest_posts))
 
@@ -413,17 +425,20 @@ def show_post(permalink="notfound"):
     userID, firstname = sessions.get_userID_firstname(cookie) 
     permalink = cgi.escape(permalink)
     post = posts.get_post_by_permalink(permalink)
+    feedback_list = feedbacks.get_feedbacks_by_permalink(permalink)
+    post_liked_by_user = True if likes.get_like(userID, permalink) else False
 
     if post is None:
         bottle.redirect("/post_not_found")
 
-    l = feedbacks.get_feedbacks_by_permalink(permalink)
     return bottle.template("entry_template", 
-                           dict(post = post, 
-                                userID = userID, firstname = firstname,
+                           dict(userID = userID, firstname = firstname,
                                 error = "", 
-                                newFeedbackContent = ""))
-
+                                feedbackContent = "",
+                                post = post,
+                                feedbacks = feedback_list,
+                                liked = post_liked_by_user
+                                ))
 
 
 @bottle.get('/newpost')
@@ -483,11 +498,11 @@ def user_profile(queriedUserID):
     queriedUserID = cgi.escape(queriedUserID)    
 
     queriedUser = users.get_user(queriedUserID)
-    postsByUser = posts.get_posts_by_userID(queriedUserID)
+    postsByUser = posts.get_posts_by_userID(queriedUserID, likes)
     
     return bottle.template('user_profile',
                            dict(userID = userID, firstname = firstname, mode = 'view',
-                                queriedUser = queriedUser, posts = postsByUser))    
+                                queriedUser = queriedUser, posts = postsByUser, colNum = 3))    
 
 
 # The main page of the blog, filtered by tag
@@ -495,9 +510,9 @@ def user_profile(queriedUserID):
 def posts_by_tag(tag="notfound"):
     cookie = bottle.request.get_cookie("session")
     userID, firstname = sessions.get_userID_firstname(cookie)    
-    escaped_tag = cgi.escape(tag)
+    tag = cgi.escape(tag)
 
-    posts_by_tag = posts.get_posts_by_tag(escaped_tag, 10)
+    posts_by_tag = posts.get_posts_by_tag(tag = tag, likeDAO = likes, num_posts = 10)
 
     return bottle.template('posts_by_tag', 
                            dict(userID = userID, firstname = firstname,

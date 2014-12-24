@@ -58,9 +58,9 @@
 		-->
 		
 		<div class="form-group">
-			<div class="col-sm-6 col-sm-offset-5">
+			<div class="col-sm-6 col-sm-offset-4">
 				<button type="submit" class="btn btn-lg btn-success" value="Submit">Submit</button>
-				<a href="/newpost" class="noLinkDec"><button type="button" class="btn btn-lg btn-default">Empty</button></a>
+				<a href="/newpost" class="noLinkDec"><button type="button" class="btn btn-lg btn-danger">Empty</button></a>
 			</div>
 		</div>		
 	  </form>

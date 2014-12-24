@@ -3,7 +3,7 @@ import pytz
 import bson
 import time
 
-from helpers import convert_utc_to_formatted_pt, extract_posts_through_cursor
+from helpers import convert_utc_to_formatted_pt, extract_posts_through_cursor, extract_preview_description
 
 
 # The Blog Post Data Access Object handles interactions with the Posts collection
@@ -41,10 +41,10 @@ class postDAO:
 
         
     # returns an array of posts, reverse ordered
-    def get_posts(self, n_posts, page_num):
+    def get_posts(self, n_posts, page_num, likeDAO):
         n_posts_skip = (page_num - 1) * n_posts
         cursor = self.posts.find().sort('_id', direction=-1).skip(n_posts_skip).limit(n_posts)  # sort by date in descending order (recent posts first)
-        l = extract_posts_through_cursor(cursor)
+        l = extract_posts_through_cursor(cursor, likeDAO)
         return l
     
     
@@ -71,36 +71,44 @@ class postDAO:
     def get_post_by_permalink(self, permalink):
         post = self.posts.find_one({'p': permalink})
         if post is not None:
-            """
-            # fix up likes values. set to zero if data is not present for comments that have never been liked
-            for comment in post['c']:
-                if 'n' not in comment:  # "n" for number of likes
-                    comment['n'] = 0
-            """
-
-            # fix up the timestamp
             utc_timestamp = post['_id'].generation_time
-            pt_timestamp_formatted = convert_utc_to_formatted_pt(utc_timestamp)
-            post['t'] = pt_timestamp_formatted
-
+            pt_formatted = convert_utc_to_formatted_pt(utc_timestamp)
+            post['t'] = pt_formatted
+            post['pd'] = extract_preview_description(body = post['b'], n_words = 30, n_chars = 240)
         return post
 
 
+    def get_post_summaries_by_userID(self, userID):
+        userID = bson.objectid.ObjectId(userID)
+        try:
+            cursor = self.posts.find({'a.u':userID}, {'_id':1, 'p':1, 's':1})  # get permalink, title, timestamp
+            l = []
+            for summary in cursor:
+                utc_timestamp = summary['_id'].generation_time
+                pt_formatted = convert_utc_to_formatted_pt(utc_timestamp)
+                summary['t'] = pt_formatted
+                l.append(summary)
+            return l
+        except:
+            print "Unexpected error on get_post_summaries_by_userID:", sys.exc_info()[0]
+            return None
+
+
     # returns an array of num_posts posts, reverse ordered, filtered by tag
-    def get_posts_by_tag(self, tag, num_posts = 'all'):
+    def get_posts_by_tag(self, tag, likeDAO, num_posts = 'all'):
 
         if num_posts == 'all':
             cursor = self.posts.find({'l': tag}).sort('_id', direction = -1)
         else:
             cursor = self.posts.find({'l':tag}).sort('_id', direction = -1).limit(num_posts)
-        l = extract_posts_through_cursor(cursor)
+        l = extract_posts_through_cursor(cursor, likeDAO)
         return l
 
 
-    def get_posts_by_userID(self, userID):
+    def get_posts_by_userID(self, userID, likeDAO):
         userID = bson.objectid.ObjectId(userID)
         cursor = self.posts.find({'a.u': userID}).sort('_id', direction = -1)
-        l = extract_posts_through_cursor(cursor)
+        l = extract_posts_through_cursor(cursor, likeDAO)
         return l
         
     
@@ -133,7 +141,7 @@ class postDAO:
 
     def decrement_likes_count(self, permalink):
         try: 
-            self.posts.update({'p': permalink}, {'$dec': {'lc': 1}})
+            self.posts.update({'p': permalink}, {'$inc': {'lc': -1}})
             return True
         except:
             print "Unexpected error on decrement_likes_count:", sys.exc_info()[0]

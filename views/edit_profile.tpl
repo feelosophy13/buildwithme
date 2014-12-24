@@ -130,7 +130,7 @@
 	   
 	   <div class="form-group">
 	     <div class="col-sm-offset-5 col-sm-2">
-	       <button type="submit" class="btn btn-default">Update Profile</button>
+	       <button type="submit" class="btn btn-success">Update Profile</button>
 	     </div>
 	   </div>
 	 </form>

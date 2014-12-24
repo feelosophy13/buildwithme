@@ -2,6 +2,8 @@
 
 <h2 class='text-center'>Contact {{queriedUser['f']}}</h2>
 
+<br />
+
 <div class="row">
  <form class="form-horizontal" role="form" method="POST">
    <div class="form-group">

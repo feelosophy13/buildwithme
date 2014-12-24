@@ -269,13 +269,13 @@ def convert_utc_to_formatted_pt(utc_timestamp):
     return pt_formatted
 
 
-def extract_posts_through_cursor(cursor):
+def extract_posts_through_cursor(cursor, likeDAO):
     l = []                    
     for post in cursor:
         utc_timestamp = post['_id'].generation_time  # naive datetime instance (contains no timezone info in the object)
-        pt_formatted = convert_utc_to_formatted_pt(utc_timestamp)
-        post['t'] = pt_formatted  # store the extract timestamp in Pacific Time
-        post['pd'] = extract_preview_description(body = post['b'], n_words = 30, n_chars = 240)
+        pt_formatted = convert_utc_to_formatted_pt(utc_timestamp)  # store the extracted UTC timestamp in Pacific Time
+        preview = extract_preview_description(body = post['b'], n_words = 30, n_chars = 240)
+        likerIDs = likeDAO.get_likerIDs_by_permalink(post['p'])
 
         l.append({
                   'p': post['p'],  # postID or permalink
@@ -286,8 +286,9 @@ def extract_posts_through_cursor(cursor):
                   'l': post['l'],  # tags
                   'fc': post['fc'],  # feedback count
                   'lc': post['lc'],  # like count
-                  't': post['t'],   # timestamp
-                  'pd': post['pd']  # preview description
+                  't': pt_formatted,  # PT timestamp
+                  'pd': preview,  # "pd" for preview description
+                  'i': likerIDs  # "i" for interested users
                   })
     return l
 

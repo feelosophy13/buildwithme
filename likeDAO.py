@@ -1,4 +1,6 @@
 import bson
+import sys
+
 
 # The User Data Access Object handles all interactions with the User collection.
 class likeDAO:
@@ -20,7 +22,7 @@ class likeDAO:
     
     # log a like
     def log_like(self, userID, permalink):
-        like = {'u': userID, 'p': permalink} 
+        like = {'u': userID, 'p': permalink}
         try:
             self.likes.insert(like)
             return True
@@ -33,10 +35,10 @@ class likeDAO:
     def remove_like(self, userID, permalink):
         try:
             self.likes.remove({'u': userID, 'p': permalink})
-            return True, like['_id']
+            return True
         except:
             print "Unexpected error on remove_like:", sys.exc_info()[0]
-            return False, None                
+            return False  
 
 
     # restore a like
@@ -50,6 +52,7 @@ class likeDAO:
             print "Unexpected error on restore_like:", sys.exc_info()[0]
             return False
 
+
     def get_liked_posts_permalinks_by_userID(self, userID, n_posts = 'all'):
         if n_posts == 'all':
             cursor = self.likes.find({'u': userID}).sort('_id', direction = -1)
@@ -59,6 +62,20 @@ class likeDAO:
         for like in cursor:
             permalinks.append(like['p'])
         return permalinks
+
+
+    def get_likerIDs_by_permalink(self, permalink):
+        try:
+            like_records_cursor = self.likes.find({'p':permalink}, {'u':1, '_id':0})
+            likerIDs = []
+            for record in like_records_cursor:
+                likerIDs.append(str(record['u']))
+            return likerIDs
+        except:
+            print "Unexpected error on get_likerIDs:", sys.exc_info()[0]
+            return None
+
+        
 
 
 

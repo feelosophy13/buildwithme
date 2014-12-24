@@ -14,7 +14,7 @@
           </p>
         </div>
         <div class="col-md-5">
-          <img class="featurette-image img-responsive center-block" src="../static/images/1414878416_face-sad-256.png" alt="Generic placeholder image">
+          <img class="featurette-image img-responsive center-block" src="../static/images/lightbulb1.gif" width="256px" height="256px" alt="Generic placeholder image">
         </div>
       </div>
 
@@ -22,7 +22,7 @@
 
       <div class="row featurette">
         <div class="col-md-5">
-          <img class="featurette-image img-responsive center-block" src="../static/images/1414878416_face-sad-256.png" alt="Generic placeholder image">
+          <img class="featurette-image img-responsive center-block" src="../static/images/like.png" width="256px" height="256px" alt="Generic placeholder image">
         </div>
         <div class="col-md-7">
           <h2 class="featurette-heading">2. Collect votes. <span class="text-muted">Test the demand.</span></h2>
@@ -42,7 +42,7 @@
           </p>
         </div>
         <div class="col-md-5">
-          <img class="featurette-image img-responsive center-block" src="../static/images/1414878416_face-sad-256.png" alt="Generic placeholder image">
+          <img class="featurette-image img-responsive center-block" src="../static/images/feedback4.png" width="256px" height="256px" alt="Generic placeholder image">
         </div>
       </div>
 
@@ -50,7 +50,7 @@
 
       <div class="row featurette">
         <div class="col-md-5">
-          <img class="featurette-image img-responsive center-block" src="../static/images/1414878416_face-sad-256.png" alt="Generic placeholder image">
+          <img class="featurette-image img-responsive center-block" src="../static/images/build.png" width="256px" height="256px" alt="Generic placeholder image">
         </div>
         <div class="col-md-7">
           <h2 class="featurette-heading">4. We will build it. <span class="text-muted">Just sit back and relax.</span></h2>
@@ -59,6 +59,8 @@
           </p>
         </div>
       </div>
+
+      <hr class="featurette-divider">
     
       <div class="row featurette">
         <div class="col-md-7">
@@ -68,7 +70,7 @@
           </p>
         </div>
         <div class="col-md-5">
-          <img class="featurette-image img-responsive center-block" src="../static/images/1414878416_face-sad-256.png" alt="Generic placeholder image">
+          <img class="featurette-image img-responsive center-block" src="../static/images/sailing-ship.png" width="256px" height="256px" alt="Generic placeholder image">
         </div>
       </div>
 

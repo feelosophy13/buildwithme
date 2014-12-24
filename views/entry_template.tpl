@@ -14,37 +14,28 @@
 		   <div class="panel-body">
 			 <div class='largeFontSize'>
 			 {{!post['b']}}<br />
-			 </div>
-	
-			 <br />
-			 <a href="#">
-			 %if ('f' in post):
-			 %numFeedbacks = len(post['f'])
-			 %else:
-			 %numFeedbacks = 0
-			 %end
-			 {{numFeedbacks}} feedbacks</a>
-
+			 </div>	
 			</div>
 		 </div>
 		 <br />
 
 		 <!-- display feedbacks -->
-		 <h4>Feedbacks</h4>
-
-		 %if ('f' in post):
-			 %numFeedbacks = len(post['f'])
+		 %if feedbacks:
+		     %numFeedbacks = len(feedbacks)
 		 %else:
-			 %numFeedbacks = 0
+		     %numFeedbacks = 0
 		 %end
+
+		 <h4>{{numFeedbacks}} feedbacks</h4>
 
 		 %for i in range(0, numFeedbacks):
 			 <blockquote class="commentBoxes">
-			   <p>{{post['f'][i]['b']}}</p>
-			   <footer><b>{{post['f'][i]['u']}}</b> on <i>{{post['f'][i]['t']}}</i></footer>
+			   <p>{{feedbacks[i]['b']}}</p>
+			   <footer><b>{{feedbacks[i]['a']['f']}}</b></footer>
 			 </blockquote>
 		 %end
 		 <!-- display feedbacks -->
+
 
 		 <br />
 
@@ -56,7 +47,7 @@
 			 <form role="form" action="/newfeedback" method="POST">
 				 <div class="form-group">
 					 <input type="hidden" name="permalink", value="{{post['p']}}">
-					 <textarea class="form-control" rows="5" id="feedbackContent" placeholder="Got anything to say?" name="feedbackContent" maxlength="400">{{newFeedbackContent}}</textarea>
+					 <textarea class="form-control" rows="5" placeholder="Got anything to say?" name="feedbackContent" maxlength="1000">{{feedbackContent}}</textarea>
 				 </div>
 				 <br />
 				 {{error}}

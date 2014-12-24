@@ -24,8 +24,10 @@
   </div><!--/.col-xs-12.col-sm-9-->
 
   <div class="col-xs-6 col-sm-3 sidebar-offcanvas" id="sidebar" role="navigation">
+    <!--
 	<img src="http://photos4.meetupstatic.com/photos/member/c/5/2/8/highres_170450472.jpeg" alt="..." class="img-thumbnail">
-
+	-->
+	<img class="img-thumbnail" src="../static/images/default_profile_image1.png" alt="sad face" width="256px" height="256px" />
 
 	<div class="text-center">
 		%if queriedUser['w']['f']:
