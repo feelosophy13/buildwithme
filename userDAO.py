@@ -10,9 +10,8 @@ import datetime
 from helpers import validate_email
 
 
-
-# The User Data Access Object handles all interactions with the User collection.
-class UserDAO:
+## The User Data Access Object handles all interactions with the User collection.
+class userDAO:
 
     def __init__(self, db):
         self.db = db
@@ -57,7 +56,7 @@ class UserDAO:
         if user['p'] != self.make_pw_hash(password, salt):  # if password doesn't a match
             error['e'] = "What's happening? Something doesn't match."
             return None
-        if 'c' in user:
+        if 'c' in user:  # if user has signed up but hasn't yet confirmed his/her email address
             error['e'] = "Please confirm your email address. A confirmation email was sent to %s." % user['e']
             return None
 
@@ -79,16 +78,12 @@ class UserDAO:
             
     def update_password(self, userID, new_password):
         new_password_hash = self.make_pw_hash(new_password)
-        user = self.get_user(userID)
-        if user:
-            try:  # try inserting password without updating the whole user document
-                userID = bson.objectid.ObjectId(userID)
-                self.users.update({'_id': userID}, {'$set': {'p': new_password_hash}})
-                return True
-            except:
-                print "Unexpected error on update_password:", sys.exc_info()[0]
-                return False
-        else:
+        userID = bson.objectid.ObjectId(userID)
+        try:  # try inserting password without updating the whole user document
+            update_status = self.users.update({'_id': userID}, {'$set': {'p': new_password_hash}})
+            return update_status['nModified'] > 0
+        except:
+            print "Unexpected error on update_password:", sys.exc_info()[0]
             return False
 
 
@@ -177,36 +172,36 @@ class UserDAO:
         userID = bson.objectid.ObjectId(userID)        
         try:
             user = self.users.find_one({'_id': userID})
+            user['b'] = '' if 'b' not in user else user['b']
+            user['z'] = '' if 'z' not in user else user['z']
+            user['g'] = '' if 'g' not in user else user['g']
+        
+            if user['g'] == 'm': 
+                user['g'] = 'male'
+            elif user['g'] == 'f':
+                user['g'] = 'female'
+            else:
+                user['g'] = 'other'
+
+            if 'w' in user:
+                user['w']['f'] = '' if 'f' not in user['w'] else user['w']['f']  # facebook
+                user['w']['l'] = '' if 'l' not in user['w'] else user['w']['l']  # linkedin
+                user['w']['o'] = '' if 'o' not in user['w'] else user['w']['o']  # other
+            else:
+                user['w'] = {'f':'', 'l':'', 'o':''}
+
+            if 'y' in user:
+                current_year = datetime.datetime.now().year
+                user['a'] = current_year - int(user['y'])
+            else: 
+                user['y'] = ''
+                user['a'] = ''
+
+            return user
+
         except:
             print "Unexpected error on get_user:", sys.exc_info()[0]
             return None
-
-        user['b'] = '' if 'b' not in user else user['b']
-        user['z'] = '' if 'z' not in user else user['z']
-        user['g'] = '' if 'g' not in user else user['g']
-        
-        if user['g'] == 'm': 
-            user['g'] = 'male'
-        elif user['g'] == 'f':
-            user['g'] = 'female'
-        else:
-            user['g'] = 'other'
-        
-        if 'w' in user:
-            user['w']['f'] = '' if 'f' not in user['w'] else user['w']['f']  # facebook
-            user['w']['l'] = '' if 'l' not in user['w'] else user['w']['l']  # linkedin
-            user['w']['o'] = '' if 'o' not in user['w'] else user['w']['o']  # other
-        else:
-            user['w'] = {'f':'', 'l':'', 'o':''}
-
-        if 'y' in user:
-            current_year = datetime.datetime.now().year
-            user['a'] = current_year - int(user['y'])
-        else: 
-            user['y'] = ''
-            user['a'] = ''
-
-        return user
 
 
     def emailID_exists(self, emailID):

@@ -6,6 +6,7 @@ import sessionDAO
 import userDAO
 import feedbackDAO
 import likeDAO
+import archivePostDAO
 
 import cgi
 import re
@@ -13,7 +14,7 @@ import datetime
 import pytz
 
 from beaker.middleware import SessionMiddleware
-from helpers import create_permalink, validate_newpost, validate_passwords, validate_signup, validate_profile_update, validate_message, validate_content, send_email, extract_tags, format_newlines, make_rand_str
+from helpers import create_permalink, validate_post, validate_passwords, validate_signup, validate_profile_update, validate_message, validate_content, send_email, make_rand_str, clean_and_format_post
 
 
 
@@ -64,36 +65,131 @@ def main_page(page_num = 1):  # by default, page_num = 1
 """
 
 
-@bottle.route('/edit_post')
-def edit_post():
-    cookie = bottle.request.get_cookie("session")
-    userID = sessions.get_userID(cookie) 
-    return "AY!"
+
 
 
 
 ##### TO-DO
-# category of posts (education, legal, technology, mobile, gaming, etc.)
-# list of previous ideas (take notes from CL)
-# edit-post function
+# remove_post function
 # edit/upload profile image function
 # profile image upload
-
 # Like/unlike JS issue
 
+###### Ideas
+# include "occupation" field in user profile
+# implement category for posts (education, legal, technology, mobile, gaming, medical/healthcare, etc.)
+# a 2-column layout for edit_profile template
 
 
+@bottle.post('/delete_post/<permalink>')
+def remove_post(permalink):
+    cookie = bottle.request.get_cookie("session")
+    userID, firstname = sessions.get_userID_firstname(cookie)
+    permalink = cgi.escape(permalink)
+
+    if userID is None:  # if user is not logged in
+        bottle.redirect('/')
+
+    ## removal steps
+    # 1. remove post from "posts" collection
+    # 2. archive into "deleted_posts" collection
+    # 3. remove like documents from the "likes" collection for the deleted post
+    
+    utc_timestamp = datetime.datetime.utcnow()
+    removal_post = posts.remove_post(userID, permalink)
+    post_archived = archived_posts.insert_entry(removal_post)  # if post_archived is false, we should try again; for now, just move on
+    likes_removed = likes.remove_likes_for_post(permalink)  # if likes_removed is false, we should try again; for now, just move on
+    
+    if removal_post:
+        bottle.redirect('/manage_posts')
+    else:
+        bottle.redirect('/internal_error')
+        
 
 
 ####### BELOW FUNCTIONS ARE COMPLETE #######
+@bottle.get('/delete_post/<permalink>')
+def remove_post_page(permalink):
+    cookie = bottle.request.get_cookie("session")
+    userID, firstname = sessions.get_userID_firstname(cookie)
+    if userID is None:
+        bottle.redirect('/')
+
+    permalink = cgi.escape(permalink)
+    post = posts.get_post_by_permalink(permalink)
+
+    return bottle.template('delete_post',
+                           dict(userID = userID, firstname = firstname, post = post))
+
+
+@bottle.get('/edit_post/<permalink>')
+def edit_post_page(permalink):
+    cookie = bottle.request.get_cookie("session")
+    userID, firstname = sessions.get_userID_firstname(cookie)
+    permalink = cgi.escape(permalink)
+    post = posts.get_post_by_permalink(permalink)
+    
+    if userID is None:
+        bottle.redirect('/login')
+    if post is None:
+        bottle.redirect('/internal_error')
+    
+    post['l'] = ', '.join(post['l'])
+    return bottle.template('post_entry',
+                           dict(userID = userID, firstname = firstname, mode = 'edit',
+                                post = post, error = ''))
+
+
+@bottle.post('/edit_post/<permalink>')
+def insert_editted_post(permalink):
+    permalink = cgi.escape(permalink)
+    cookie = bottle.request.get_cookie("session")
+    userID, firstname = sessions.get_userID_firstname(cookie)
+    if userID is None:
+        bottle.redirect('/login')
+        return
+
+    post = {'p': permalink,  # "p" for permalink
+            'a':  # "a" for author
+                {'u': userID,  # author userID
+                 'f': firstname},  # author first name
+            's': bottle.request.forms.get("title"),  # "s" for subject; title
+            'b':  # "b" for body
+                {'c': bottle.request.forms.get("bodySummary"),  # "c" for concise; summary
+                 'p': bottle.request.forms.get("bodyProblem"),  # "p" for problem
+                 's': bottle.request.forms.get("bodySolution"),  # "s" for solution
+                 'm': bottle.request.forms.get("bodyMonetize"),  # "m" for monetization method
+                 'a': bottle.request.forms.get("bodyAdvertise")},  # "a" for advertisement method
+            'y': bottle.request.forms.get("youtubeLink"),  # "y" for Youtube link
+            'l': bottle.request.forms.get("tags"),  # "l" for tags label
+            'i': None,  # "i" for interested users' userIDs, or likerIDs (will be imported from the original post document upon date)
+            'lc': None,  # "lc" for likes count (will be imported from the original post document upon update)
+            'fc': None  # "fc" for feedbacks count (will be imported from the original post document upon update)
+            }
+
+    error = {'e':''}
+
+    if validate_post(posts, post, error, mode = 'edit'):
+        post = clean_and_format_post(post)        
+        postUpdated = posts.update_entry(post)
+        if postUpdated:
+            bottle.redirect("/post/" + permalink)
+        else:
+            bottle.redirect('internal_error')
+    else:  # if post update not validated
+        return bottle.template("post_entry", 
+                               dict(userID = userID, firstname = firstname, mode = 'edit',
+                                    post = post, error = error['e']))
+
+
 @bottle.get('/manage_posts')
 def manage_posts():
     cookie = bottle.request.get_cookie("session")
-    userID, firstname = sessions.get_userID_firstname(cookie)
-    
+    userID, firstname = sessions.get_userID_firstname(cookie)    
     if userID is None:
         bottle.redirect('/')
-        
+        return
+
     my_posts_summaries = posts.get_post_summaries_by_userID(userID)
     
     return bottle.template("manage_posts",
@@ -105,12 +201,17 @@ def manage_posts():
 def display_liked_ideas():
     cookie = bottle.request.get_cookie("session")
     userID, firstname = sessions.get_userID_firstname(cookie)
-    liked_posts_permalinks = likes.get_liked_posts_permalinks_by_userID(userID)
-    
+    if userID is None:
+        bottle.redirect('/')
+        return
+
+    liked_posts_permalinks = likes.get_liked_posts_permalinks_by_userID(userID)  # permalinks of posts that a user has liked
     liked_posts = []
+    
     for permalink in liked_posts_permalinks:
         post = posts.get_post_by_permalink(permalink)
-        post['i'] = str(userID)  # "i" for interested userIDs (or "likerIDs")
+        XXX
+        # post['i'] = str(userID)  # "i" for interested userIDs (or "likerIDs")
         liked_posts.append(post)
 
     return bottle.template('liked_posts', 
@@ -122,15 +223,16 @@ def display_liked_ideas():
 def post_feedback():
     cookie = bottle.request.get_cookie("session")
     userID, firstname = sessions.get_userID_firstname(cookie)
+    if userID is None:  # if user is not logged in (possible hack attempt)
+        bottle.redirect('/login')
+        return
 
     feedbackContent = bottle.request.forms.get("feedbackContent")  # will be escaped later (after the body length has been verified)
     permalink = bottle.request.forms.get("permalink"); permalink = cgi.escape(permalink)
     post = posts.get_post_by_permalink(permalink)
-
-    if userID is None:  # if user is not logged in (possible hack attempt)
-        bottle.redirect('/login')
     if post is None:  # if post not found (possible hack attempt)
         bottle.redirect("/post_not_found")
+        return 
 
     if validate_content(content = feedbackContent, max_char_len = 1000, optional = False):
         feedbackContent = cgi.escape(feedbackContent, quote=True).strip()
@@ -146,7 +248,7 @@ def post_feedback():
 
     else:
         error = "What are you doing? No funny business is allowed here!"
-    return bottle.template("entry_template", 
+    return bottle.template("entry_view", 
                             dict(userID = userID, firstname = firstname,
                                 error = error, post = post, feedbackContent = ""))
 
@@ -170,12 +272,13 @@ def confirm_signup(conf_str_url):
     cookie = bottle.request.get_cookie("session")
     emailID = bottle.request.forms.get("emailID")
     userID, firstname = sessions.get_userID_firstname(cookie)
-    conf_str_url = cgi.escape(conf_str_url)
-    
+
     if userID:  # if user is already signed in
         bottle.redirect("/")  # redirect to homepage
-    
+
+    conf_str_url = cgi.escape(conf_str_url)    
     signup_conf_str = users.find_signup_conf_str(emailID)
+    
     if signup_conf_str == conf_str_url:
         user = users.remove_conf_str(emailID)        
         if user:
@@ -203,6 +306,9 @@ def confirm_signup(conf_str_url):
 def edit_profile_page():
     cookie = bottle.request.get_cookie("session")
     userID = sessions.get_userID(cookie) 
+    if userID is None:
+        bottle.redirect('/login')
+        return
     user = users.get_user(userID)
     
     return bottle.template("edit_profile",
@@ -213,20 +319,24 @@ def edit_profile_page():
 def edit_profile():
     cookie = bottle.request.get_cookie("session")
     userID = sessions.get_userID(cookie)
-    firstname = bottle.request.forms.get("firstname"); 
-    lastname = bottle.request.forms.get("lastname"); 
-    bio = bottle.request.forms.get("bio"); 
-    birthYear = bottle.request.forms.get("birthYear"); 
-    facebookURL = bottle.request.forms.get("facebookURL");
-    linkedInURL = bottle.request.forms.get("linkedInURL"); 
-    otherURL = bottle.request.forms.get("otherURL"); 
-    zip = bottle.request.forms.get("zip"); 
+    if userID is None:
+        bottle.redirect('/login')
+        return
+    
+    firstname = bottle.request.forms.get("firstname")
+    lastname = bottle.request.forms.get("lastname")
+    bio = bottle.request.forms.get("bio")
+    birthYear = bottle.request.forms.get("birthYear")
+    facebookURL = bottle.request.forms.get("facebookURL")
+    linkedInURL = bottle.request.forms.get("linkedInURL")
+    otherURL = bottle.request.forms.get("otherURL")
+    zip = bottle.request.forms.get("zip")
     gender = bottle.request.forms.get("gender")
     links = {'f': facebookURL, 'l': linkedInURL, 'o': otherURL}  # no error in JSON formation even when URLs are not escaped and they contain special characters (", ', >, <, etc.)
     
     error = {}
     
-    if validate_profile_update(userID, firstname, lastname, bio, birthYear, links, zip, gender, error):
+    if validate_profile_update(firstname, lastname, bio, birthYear, links, zip, gender, error):
         # all of the variables except bio should have been cleared of special characters in validate_profile_update();
         # however, we will escape them just for an added security measure
         firstname = cgi.escape(firstname)
@@ -239,10 +349,14 @@ def edit_profile():
         zip = cgi.escape(zip)
         gender = cgi.escape(gender)
 
-        profile_updated = users.edit_user_info(userID, firstname, lastname, bio, birthYear, links, zip, gender)
+        users_col_updated = users.edit_user_info(userID, firstname, lastname, bio, birthYear, links, zip, gender)
+        posts_col_updated = posts.edit_author_firstname(userID, firstname)
+        sessions_col_updated = sessions.edit_user_firstname(userID, firstname)
+        feedbacks_col_updated = feedbacks.edit_user_firstname(userID, firstname)
 
-        if profile_updated:
+        if users_col_updated and posts_col_updated and sessions_col_updated and feedbacks_col_updated:  # upon failure, we should try again; for now, just move on
             bottle.redirect('/user/' + str(userID))
+            return  
         else:
             return bottle.template("error_template",
                                    dict(userID = userID, firstname = firstname))
@@ -267,6 +381,7 @@ def contact_user_page(queriedUserID):
     queriedUserID = cgi.escape(queriedUserID)
     queriedUser = users.get_user(queriedUserID) 
     
+    # users not logged in will view the "please log in" message    
     return bottle.template('user_profile', 
                            dict(userID = userID, firstname = firstname, 
                                 mode = 'contact', message = '',
@@ -278,6 +393,10 @@ def contact_user_page(queriedUserID):
 def contact_user(queriedUserID):
     cookie = bottle.request.get_cookie("session")
     userID, firstname = sessions.get_userID_firstname(cookie)    
+    if userID is None:
+        bottle.redirect('/login')
+        return
+
     queriedUserID = cgi.escape(queriedUserID)
     queriedUser = users.get_user(queriedUserID)
     subject = "You've received a message!"
@@ -306,7 +425,6 @@ def message_sent_page():
     cookie = bottle.request.get_cookie("session")
     userID, firstname = sessions.get_userID_firstname(cookie) 
     targetUserID = bottle.request.query.get('targetUserID')
-    
     if userID is None:
         bottle.redirect('/')
     
@@ -322,6 +440,9 @@ def like():
     post = posts.get_post_by_permalink(permalink)
     like = likes.get_like(userID, permalink)
     
+    if userID is None:
+        bottle.redirect('/')
+        return
     if post is None:
         bottle.redirect("/post_not_found")
         return
@@ -351,6 +472,9 @@ def unlike():
     post = posts.get_post_by_permalink(permalink)
     like = likes.get_like(userID, permalink)
 
+    if userID is None:
+        bottle.redirect('/')
+        return
     if post is None:
         bottle.redirect("/post_not_found")
         return
@@ -359,7 +483,6 @@ def unlike():
         return 'already unliked'
 
     ## process an unlike
-    print "SHIT"
     like_removed = likes.remove_like(userID, permalink)    
     if like_removed:  # only if like log was removed, decrement the like count
         likes_count_decremented = posts.decrement_likes_count(permalink)
@@ -376,8 +499,11 @@ def unlike():
 @bottle.get('/change_password')
 def change_password_page():
     cookie = bottle.request.get_cookie("session")
-    userID, firstname = sessions.get_userID_firstname(cookie) 
-
+    userID, firstname = sessions.get_userID_firstname(cookie)     
+    if userID is None:
+        bottle.redirect('/login')
+        return
+        
     return bottle.template("change_password",
                            dict(userID = userID, firstname = firstname,
                                 current_password = "", new_password_1 = "", new_password_2 = "",
@@ -387,22 +513,26 @@ def change_password_page():
 @bottle.post('/change_password')
 def change_password():
     cookie = bottle.request.get_cookie("session")
-    userID, firstname = sessions.get_userID_firstname(cookie) 
+    userID, firstname = sessions.get_userID_firstname(cookie)     
+    if userID is None:
+        bottle.redirect('/login')
+        return
+    
     current_password = bottle.request.forms.get("current_password"); current_password = cgi.escape(current_password)
     new_password = bottle.request.forms.get("new_password"); new_password = cgi.escape(new_password)
     new_password2 = bottle.request.forms.get("new_password2"); new_password2 = cgi.escape(new_password2)
 
     error = {}
     
-    ## if all the passwords are good
-    if validate_passwords(users, userID, current_password, new_password, new_password2, error):
+    ## if all the passwords are good and a correct user submitted the post request
+    if validate_passwords(users, userID, current_password, new_password, new_password2, error):  # blank userIDs are also caught here
         password_updated = users.update_password(userID, new_password)        
         if password_updated:
             bottle.redirect('/user/' + str(userID))
         else:
             return bottle.template("change_password",
                                    dict(userID = userID, firstname = firstname))
-    ## if there is a bad password
+    ## if there is a bad password or an incorrect user submitted the post request
     else:
         return bottle.template("change_password", 
                                dict(userID = userID, firstname = firstname,
@@ -413,7 +543,7 @@ def change_password():
 def main_page():
     cookie = bottle.request.get_cookie("session")
     userID, firstname = sessions.get_userID_firstname(cookie) 
-    latest_posts = posts.get_posts(10, 1, likes)
+    latest_posts = posts.get_posts_basic(10, 1, likes)
 
     return bottle.template('main', 
                            dict(userID = userID, firstname = firstname, posts = latest_posts))
@@ -431,7 +561,7 @@ def show_post(permalink="notfound"):
     if post is None:
         bottle.redirect("/post_not_found")
 
-    return bottle.template("entry_template", 
+    return bottle.template("entry_view2", 
                            dict(userID = userID, firstname = firstname,
                                 error = "", 
                                 feedbackContent = "",
@@ -441,53 +571,72 @@ def show_post(permalink="notfound"):
                                 ))
 
 
-@bottle.get('/newpost')
-def get_newpost():
-    cookie = bottle.request.get_cookie("session")
-    userID, firstname = sessions.get_userID_firstname(cookie)    
-
-    if userID is None:  # if user is not signed in
-        bottle.redirect('/login')
-    return bottle.template("newpost_template", 
-                           dict(userID = userID, firstname = firstname,
-                                title = "", postContent = "", youtubeLink = "", tags = "", 
-                                error = ""))
-
-
-@bottle.post('/newpost')
-def post_newpost():
+@bottle.get('/insert_post')
+def post_entry():
     cookie = bottle.request.get_cookie("session")
     userID, firstname = sessions.get_userID_firstname(cookie)
+    if userID is None:  # if user is not signed in
+        bottle.redirect('/login')
 
-    title = bottle.request.forms.get("title");
-    postContent = bottle.request.forms.get("postContent"); 
-    youtubeLink = bottle.request.forms.get("youtubeLink"); 
-    tags = bottle.request.forms.get("tags"); 
+    ## build a blank post to populate form fields
+    post = {'a':  # "a" for author
+                {'u':userID,  # author userID
+                 'f':firstname},  # author first name
+            's':'',  # "s" for subject; title
+            'b':  # "b" for body
+                {'c':'',  # "c" for concise; summary
+                 'p':'',  # "p" for problem
+                 's':'',  # "s" for solution
+                 'm':'',  # "m" for monetization method
+                 'a':''},  # "a" for advertisement method
+            'y':'',  # "y" for Youtube link
+            'l':''  # "l" for label; tags
+            }
+    return bottle.template("post_entry", 
+                           dict(userID = userID, firstname = firstname, mode = 'new_insert',
+                                post = post, error = ""))
 
-    error = {'e':''}
-    permalink = create_permalink(title)
 
-    if validate_newpost(posts, userID, permalink, title, postContent, youtubeLink, tags, error):
-        
-        title = cgi.escape(title, quote = True).strip()
-        postContent = cgi.escape(postContent, quote = True).strip()
-        youtubeLink = cgi.escape(youtubeLink).strip()
-        tags = cgi.escape(tags).strip()
+@bottle.post('/insert_post')
+def insert_post():
+    cookie = bottle.request.get_cookie("session")
+    userID, firstname = sessions.get_userID_firstname(cookie)
+    if userID is None:
+        bottle.redirect('/login')
+        return
     
-        postContent = format_newlines(postContent)
-        tags_array = extract_tags(tags)
-        
-        postInserted = posts.insert_entry(permalink, title, postContent, youtubeLink, tags_array, userID, firstname)
+    ## build a post document with submitted information (blank fields are initialized with blank values)
+    post = {'a':  # "a" for author
+                {'u': userID,  # author userID
+                 'f': firstname},  # author first name
+            's': bottle.request.forms.get("title"),  # "s" for subject; title
+            'b':  # "b" for body
+                {'c': bottle.request.forms.get("bodySummary"),  # "c" for concise; summary
+                 'p': bottle.request.forms.get("bodyProblem"),  # "p" for problem
+                 's': bottle.request.forms.get("bodySolution"),  # "s" for solution
+                 'm': bottle.request.forms.get("bodyMonetize"),  # "m" for monetization method
+                 'a': bottle.request.forms.get("bodyAdvertise")},  # "a" for advertisement method
+            'y': bottle.request.forms.get("youtubeLink"),  # "y" for Youtube link
+            'l': bottle.request.forms.get("tags"),  # "l" for tags label
+            'i': None,  # 'i' for interested users' userIDs, or likerIDs
+            'lc':0,  # "lc" for likes count
+            'fc':0  # "fc" for feedbacks count
+            }
+    post['p'] = create_permalink(post['s'])  # create a permalink from submitted post title
+    
+    error = {'e':''}
+
+    if validate_post(posts, post, error, mode = 'new_insert'): 
+        post = clean_and_format_post(post)
+        postInserted = posts.insert_entry(post)
         if postInserted:
-            bottle.redirect("/post/" + permalink)
+            bottle.redirect("/post/" + post['p'])  # redirect to post's permalink
         else:
             bottle.redirect('internal_error')
     else:
-        return bottle.template("newpost_template", 
-                               dict(userID = userID, firstname = firstname, 
-                                    title = title, postContent = postContent, youtubeLink = youtubeLink, tags = tags,
-                                    error = error['e']
-                                    ))
+        return bottle.template("post_entry",
+                               dict(userID = userID, firstname = firstname, mode = 'new_insert',
+                                    post = post, error = error['e']))
 
 
 
@@ -496,7 +645,6 @@ def user_profile(queriedUserID):
     cookie = bottle.request.get_cookie("session")
     userID, firstname = sessions.get_userID_firstname(cookie)    
     queriedUserID = cgi.escape(queriedUserID)    
-
     queriedUser = users.get_user(queriedUserID)
     postsByUser = posts.get_posts_by_userID(queriedUserID, likes)
     
@@ -523,8 +671,8 @@ def posts_by_tag(tag="notfound"):
 def present_signup():
     cookie = bottle.request.get_cookie("session")
     userID, firstname = sessions.get_userID_firstname(cookie)    
-    if userID:  # if user is already signed in
-        bottle.redirect("/")  # redirect to homepage
+    if userID:
+        bottle.redirect("/")
     return bottle.template("signup",
                            dict(firstname = "", lastname = "", emailID = "", password = "", password2 = "",
                                 error = ""))
@@ -581,13 +729,13 @@ def please_confirm_email_page():
     return bottle.template('please_confirm_email')
 
 
-# displays the initial login form
 @bottle.get('/login')
 def present_login():
     cookie = bottle.request.get_cookie("session")
     userID, firstname = sessions.get_userID_firstname(cookie)    
     if userID:
 		bottle.redirect("/")
+		return
     return bottle.template("login",
                            dict(userID = userID, firstname = firstname,
                                 emailID = "", password = "",
@@ -595,7 +743,6 @@ def present_login():
                                 ))
 
 
-# handles a login request
 @bottle.post('/login')
 def process_login():
     emailID = bottle.request.forms.get("emailID"); emailID = cgi.escape(emailID)
@@ -616,7 +763,7 @@ def process_login():
         bottle.response.set_cookie("session", cookie)
         bottle.redirect("/")
 
-    else:  # if invalid login credential provided
+    else:  # if 1. invalid login credential provided, 2. user hasn't confirmed his/her email address
         return bottle.template("login",
                                dict(emailID = emailID, password = "",
                                     error = error['e']
@@ -672,8 +819,9 @@ connection = pymongo.MongoClient(connection_string)
 database = connection.buildwithme
 
 posts = postDAO.postDAO(database)
-users = userDAO.UserDAO(database)
-sessions = sessionDAO.SessionDAO(database)
+archive_posts = archivePostDAO.archivePostDAO(database)
+users = userDAO.userDAO(database)
+sessions = sessionDAO.sessionDAO(database)
 feedbacks = feedbackDAO.feedbackDAO(database)
 likes = likeDAO.likeDAO(database)
 

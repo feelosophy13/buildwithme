@@ -11,26 +11,64 @@ import random
 from private.email_credentials import smtp_host, smtp_port, sender_emailID, sender_emailPassword
 
 ############################################
+def clean_and_format_post(post):
+    post['s'] = cgi.escape(post['s'], quote = True)
+    for key in post['b'].keys():  # the sub-keys in the "b" (body) JSON are "c", "p", "s", "m", and "a"
+        postContent = cgi.escape(post['b'][key], quote = True).strip()
+        postContent = format_newlines(postContent)
+        post['b'][key] = postContent
+    post['y'] = cgi.escape(post['y']).strip()
+    post['l'] = cgi.escape(post['l']).strip()            
+    post['l'] = extract_tags(post['l'])
+    return post
 
-def validate_newpost(postDAO, userID, permalink, title, postContent, youtubeLink, tags, error):
+
+def validate_post(postDAO, post, error, mode):
     error['e'] = ''
 
-    if userID is None or len(title) > 120 or len(postContent) > 2000: 
-        error['e'] = "Please don't hack us."
-        return False
-    if postDAO.get_post_by_permalink(permalink):  # if there is another post with the same permalink (and thus with the same title)
-        error['e'] = "Sorry, there is another post with the same title."
-        return False
-    if not validate_content(title, max_char_len = 120, optional = False):
+    ## if inserting a new post, make sure permalink is unique
+    if mode == 'new_insert':  
+        if postDAO.get_post_by_permalink(post['p']):  # if there is another post with the same permalink (and thus with the same title)
+            error['e'] = "Sorry, there is another post with the same title."
+            return False
+    
+    ## validate post title
+    if not validate_content(post['s'], max_char_len = 120, optional = False):
         error['e'] = "Sorry, invalid title."
         return False
-    if not validate_content(postContent, max_char_len = 2000, optional = False):
-        error['e'] = 'Sorry, invalid body content.'
+
+    ## validate post body -- summary
+    if not validate_content(post['b']['c'], max_char_len = 200, optional = False):
+        error['e'] = 'Sorry, invalid summary content. Maximum of 200 characters.'
         return False
-    if not validate_URL(youtubeLink, optional = True):
+
+    ## validate post body -- problem
+    if not validate_content(post['b']['p'], max_char_len = 500, optional = False):
+        error['e'] = 'Sorry, invalid body content describing the problem. Maximum of 500 characters.'
+        return False
+
+    ## validate post body -- solution
+    if not validate_content(post['b']['s'], max_char_len = 500, optional = False):
+        error['e'] = 'Sorry, invalid body content describing the solution. Maximum of 500 characters.'
+        return False
+
+    ## validate post body -- monetization
+    if not validate_content(post['b']['m'], max_char_len = 500, optional = False):
+        error['e'] = 'Sorry, invalid body content describing the monetization methods. Maximum of 500 characters.'
+        return False
+
+    ## validate post body -- advertise
+    if not validate_content(post['b']['a'], max_char_len = 500, optional = False):
+        error['e'] = 'Sorry, invalid body content describing the marketing methods. Maximum of 500 characters.'
+        return False
+
+    ## validate post Youtube link
+    if not validate_URL(post['y'], optional = True):
         error['e'] = 'Sorry, invalid link to a Youtube video.'
         return False
-    if not validate_tags(tags, optional = True):
+
+    ## validate post tags
+    if not validate_tags(post['l'], optional = True):
         error['e'] = "Sorry, invalid tags. Maximum of 6 tags, please."
         return False        
     return True
@@ -81,7 +119,7 @@ def create_permalink(title):
 
 def validate_passwords(userDAO, userID, current_password, new_password, new_password2, error):
     error['e'] = ""
-        
+    
     if current_password != '' and new_password != '' and new_password2 != '':
         if new_password == new_password2:  # if the two new passwords match
             if validate_password(new_password):    # if the new password is good (at least 3 characters long)
@@ -123,7 +161,7 @@ def validate_signup(userDAO, emailID, firstname, lastname, password, password2, 
     return True
 
 
-def validate_profile_update(userID, firstname, lastname, bio, birthYear, links, zip, gender, error):
+def validate_profile_update(firstname, lastname, bio, birthYear, links, zip, gender, error):
     error['e'] = ""
     
     if not validate_name(firstname) or not validate_name(lastname):
@@ -274,22 +312,18 @@ def extract_posts_through_cursor(cursor, likeDAO):
     for post in cursor:
         utc_timestamp = post['_id'].generation_time  # naive datetime instance (contains no timezone info in the object)
         pt_formatted = convert_utc_to_formatted_pt(utc_timestamp)  # store the extracted UTC timestamp in Pacific Time
-        preview = extract_preview_description(body = post['b'], n_words = 30, n_chars = 240)
         likerIDs = likeDAO.get_likerIDs_by_permalink(post['p'])
+        # preview = extract_preview_description(body = post['b'], n_words = 30, n_chars = 240)
+        
+        if 'y' not in post:
+            post['y'] = ''
+        if 'l' not in post:
+            post['l'] = []
+        post['t'] = pt_formatted  # "t" for PT timestamp
+        post['i'] = likerIDs  # "i" for interested users        
+        # post['pd'] = preview  # "pd" for preview description
 
-        l.append({
-                  'p': post['p'],  # postID or permalink
-                  'a': post['a'],  # "a" for author
-                  's': post['s'],  # title
-                  'b': post['b'],  # body
-                  'y': post['y'],  # youtube link
-                  'l': post['l'],  # tags
-                  'fc': post['fc'],  # feedback count
-                  'lc': post['lc'],  # like count
-                  't': pt_formatted,  # PT timestamp
-                  'pd': preview,  # "pd" for preview description
-                  'i': likerIDs  # "i" for interested users
-                  })
+        l.append(post)
     return l
 
 

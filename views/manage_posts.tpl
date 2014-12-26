@@ -8,13 +8,13 @@
 		<tr>
 			<th>Date</th>
 			<th>Title</th>
-			<th></th>
+			<th>Action</th>
 		</tr>
 		%for summary in summaries:			
 			<tr>
 				<td>{{summary['t']}}</td>
 				<td><a href="/post/{{summary['p']}}">{{summary['s']}}</a></td>
-				<td>Edit | Delete | Renew</td>
+				<td><a href="/edit_post/{{summary['p']}}">Edit</a> | <a href="/delete_post/{{summary['p']}}">Delete</a></td>
 			</tr>
 		%end
 	</table>

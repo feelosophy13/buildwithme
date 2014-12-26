@@ -25,13 +25,13 @@
 						by <a href='/user/{{post['a']['u']}}'>{{post['a']['f']}}</a>
 					</p>
 					
-					<p>{{post['pd']}}</p>
+					<p>{{post['b']['s']}}</p>
 
 					<p>
-						<a href="#" class="btn btn-warning">Feedback</a> 
+						<a href="/post/{{post['p']}}" class="btn btn-warning">Read More</a> 
 
-						%if str(userID) in post['i']:
-							<a href="/post/{{post['p']}}#feedback" class="btn btn-success" data-permalink="{{post['p']}}">Unlike Idea</a>
+						%if userID in post['i']:
+							<a href="/post/{{post['p']}}" class="btn btn-success" data-permalink="{{post['p']}}">Unlike Idea</a>
 						%else:
 							<a href="#" class="btn btn-success" data-permalink="{{post['p']}}">Like Idea</a>
 						%end

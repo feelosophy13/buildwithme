@@ -112,11 +112,18 @@
 			</p>
 			<br />
 
-
 			<h3>What if my idea wasn't selected but I still want to build it?</h3>
 			<p class="lead">
 			We can implement it for you for a fee. Please <a href="#">contact us</a> to get a quote.
 			</p>
+			<br />
+			
+			<h3>How many likes do I need for my idea to get selected?</h3>
+			<p class="lead">
+			We try to select the most popular ideas in the top 10% range. We will occasionally select ideas that are not in the bracket if we believe that there is a good potential. Though rarely, we may also drop popular ideas.
+			</p>
+			
+			<h3></h3>
 			
 			<!--
 			<br />

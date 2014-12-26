@@ -2,11 +2,12 @@ import sys
 import pytz
 import bson
 import time
+import datetime
 
 from helpers import convert_utc_to_formatted_pt, extract_posts_through_cursor, extract_preview_description
 
 
-# The Blog Post Data Access Object handles interactions with the Posts collection
+## The Post Data Access Object handles interactions with the Posts collection
 class postDAO:
 
     # constructor for the class
@@ -15,21 +16,7 @@ class postDAO:
         self.posts = database.posts
 
 
-    # inserts the entry and returns a permalink for the entry
-    def insert_entry(self, permalink, title, postContent, youtubeLink, tags_array, userID, firstname): 
-
-        # build a new post
-        post = {"p": permalink,  # "p" for permalink
-                "a": {'u': userID, 'f': firstname},  # "a" for author; "u" for userID; "f" for first name
-                "s": title,  # "s" for subject
-                "b": postContent,  # "b" for body
-                "y": youtubeLink,  # "y" for Youtube
-                "l": tags_array,  # "l" for tags label
-                "fc": 0,  # "fc" for feedback count
-                "lc": 0  # "lc" for like count
-                }
-        
-        # now insert the post
+    def insert_entry(self, post):
         try:
             self.posts.insert(post)
             return True
@@ -37,11 +24,52 @@ class postDAO:
             print "Unexpected error on insert_entry:", sys.exc_info()[0]
             return False
 
-        return permalink
 
-        
-    # returns an array of posts, reverse ordered
-    def get_posts(self, n_posts, page_num, likeDAO):
+    def update_entry(self, post):        
+        ## get original post entry and update timestamp
+        orig_post = self.posts.find_one({'p':post['p']})
+        utc_timestamp = datetime.datetime.utcnow()
+
+        ## import fields from  document 
+        post['_id'] = orig_post['_id']  # postID
+        post['p'] = orig_post['p']  # "p" for permalink
+        post['fc'] = orig_post['fc']  # "fc" for feedback count
+        post['lc'] = orig_post['lc']  # "lc" for like count
+        post['i'] = orig_post['i']  # "i" for interested users' userIDs, or likerIDs
+        post['t'] = utc_timestamp  # "t" for update timestamp in UTC
+
+        ## update the old post document with the new post
+        try:
+            self.posts.update({'_id':post['_id']}, post)
+            return True
+        except:
+            print "Unexpected error on insert_entry:", sys.exc_info()[0]
+            return False
+
+
+    def remove_post(self, userID, permalink):
+        post = self.posts.find_one({'p':permalink})
+        if userID == post['a']['u']:  # if userID of the user delivering the remove action matches with the post author's userID
+            try:
+                self.posts.remove({'p': permalink})
+                return post  # return the removed post (used for archiving)
+            except:
+                print "Unexpected error on remove_post_by_permalink:", sys.exc_info()[0]
+                return False
+        else:  # if someone who's NOT the author of the post attempt the delete
+            return False 
+
+
+    ## loads posts with basic information; excludes the body except summary (i.e. the fields for "problem", "solution", "monetization", and "marketing")
+    def get_posts_basic(self, n_posts, page_num, likeDAO):
+        n_posts_skip = (page_num - 1) * n_posts
+        cursor = self.posts.find({}, {'_id':1, 'a':1, 'b.s':1, 'p':1, 's':1, 'lc':1, 'fc':1, 'y':1, 'l':1}).sort('_id', direction=-1).skip(n_posts_skip).limit(n_posts)  # sort by date in descending order (recent posts first)
+        l = extract_posts_through_cursor(cursor, likeDAO)
+        return l
+
+    
+    ## loads posts with complete information
+    def get_posts_complete(self, n_posts, page_num, likeDAO):
         n_posts_skip = (page_num - 1) * n_posts
         cursor = self.posts.find().sort('_id', direction=-1).skip(n_posts_skip).limit(n_posts)  # sort by date in descending order (recent posts first)
         l = extract_posts_through_cursor(cursor, likeDAO)
@@ -67,15 +95,24 @@ class postDAO:
         return page_num != 1
 
         
-    # find a post corresponding to a particular permalink
-    def get_post_by_permalink(self, permalink):
+    def get_post_by_permalink(self, permalink):        
         post = self.posts.find_one({'p': permalink})
         if post is not None:
             utc_timestamp = post['_id'].generation_time
             pt_formatted = convert_utc_to_formatted_pt(utc_timestamp)
             post['t'] = pt_formatted
-            post['pd'] = extract_preview_description(body = post['b'], n_words = 30, n_chars = 240)
+            # post['pd'] = extract_preview_description(body = post['b'], n_words = 30, n_chars = 240)
+            if 'l' not in post:
+                post['l'] = []
+            if 'y' not in post:
+                post['y'] = ''
+            if 'i' not in post:
+                post['i'] = []
         return post
+        
+    
+    def get_post_by_permalink_basic(self, permalink):
+        
 
 
     def get_post_summaries_by_userID(self, userID):
@@ -94,13 +131,12 @@ class postDAO:
             return None
 
 
-    # returns an array of num_posts posts, reverse ordered, filtered by tag
     def get_posts_by_tag(self, tag, likeDAO, num_posts = 'all'):
 
         if num_posts == 'all':
-            cursor = self.posts.find({'l': tag}).sort('_id', direction = -1)
+            cursor = self.posts.find({'l': tag}, {'_id':1, 'a':1, 'b.s':1, 'p':1, 's':1, 'lc':1, 'fc':1, 'y':1, 'l':1}).sort('_id', direction = -1)
         else:
-            cursor = self.posts.find({'l':tag}).sort('_id', direction = -1).limit(num_posts)
+            cursor = self.posts.find({'l':tag}, {'_id':1, 'a':1, 'b.s':1, 'p':1, 's':1, 'lc':1, 'fc':1, 'y':1, 'l':1}).sort('_id', direction = -1).limit(num_posts)
         l = extract_posts_through_cursor(cursor, likeDAO)
         return l
 
@@ -147,4 +183,14 @@ class postDAO:
             print "Unexpected error on decrement_likes_count:", sys.exc_info()[0]
             return False
             
+    
+    def edit_author_firstname(self, userID, firstname):
+        userID = bson.objectid.ObjectId(userID)
+        try:
+            update_status = self.posts.update({'a.u':userID}, {'$set':{'a.f':firstname}}, multi = True)
+            return update_status['nModified'] > 0
+        except:
+            print "Unexpected error on edit_author_firstname:", sys.exc_info()[0]
+            return False
+
             

@@ -29,6 +29,7 @@
 	-->
 	<img class="img-thumbnail" src="../static/images/default_profile_image1.png" alt="sad face" width="256px" height="256px" />
 
+	%if userID is not None:  # show social media links only if user is logged in
 	<div class="text-center">
 		%if queriedUser['w']['f']:
 			<a href="{{queriedUser['w']['f']}}" target="_blank"><img src="../static/images/fb_48.png" alt="facebook" /></a>
@@ -40,6 +41,9 @@
 			<a href="{{queriedUser['w']['o']}}" target="_blank"><img src="../static/images/o_48.png" alt="other" width="46px" height="46px" /></a>
 		%end
 	</div>
+	%else:
+	<p></p>
+	%end
 
 
 	<div class="list-group">

@@ -2,7 +2,7 @@
 
 <div class="starter-template">
    <div class="row">
-	  <div class="col-md-6 col-md-offset-3"><!-- centering the posts in the middle -->
+	  <div class="col-md-6 col-md-offset-3">
 
 		 <div class="panel panel-default">
 		   <div class="panel-heading">

@@ -2,7 +2,7 @@ import bson
 import sys
 
 
-# The User Data Access Object handles all interactions with the User collection.
+## The Likes Data Access Object handles all interactions with the Like collection.
 class likeDAO:
 
     def __init__(self, db):
@@ -75,7 +75,15 @@ class likeDAO:
             print "Unexpected error on get_likerIDs:", sys.exc_info()[0]
             return None
 
-        
+    
+    def remove_likes_for_post(self, permalink):
+        try:
+            self.likes.remove({'p':permalink})
+            return True
+        except:
+            print "Unexpected error on remove_likes_for_post:", sys.exc_info()[0]
+            return False
+
 
 
 

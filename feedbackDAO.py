@@ -1,8 +1,10 @@
 import sys
+import bson
 
 from helpers import convert_utc_to_formatted_pt
 
-# The User Data Access Object handles all interactions with the User collection.
+
+## The Feedback Data Access Object handles all interactions with the Feedback collection.
 class feedbackDAO:
 
     def __init__(self, db):
@@ -49,6 +51,14 @@ class feedbackDAO:
         return l
 
 
+    def edit_user_firstname(self, userID, firstname):
+        userID = bson.objectid.ObjectId(userID)
+        try:
+            update_status = self.feedbacks.update({'a.u':userID}, {'$set':{'a.f':firstname}}, multi = True)
+            return update_status['nModified'] > 0
+        except:
+            print "Unexpected error on edit_author_firstname:", sys.exc_info()[0]
+            return False
 
 
 

@@ -28,7 +28,7 @@
 
 		%else:  # if user logged in
 		<div class="navbar-form navbar-right">
-		 <a href="/newpost" class="noLinkDec"><button type="button" class="btn btn-info navbar-right">+ SUBMIT IDEA</button></a>
+		 <a href="/insert_post" class="noLinkDec"><button type="button" class="btn btn-info navbar-right">+ SUBMIT IDEA</button></a>
 		</div>
 
 		<ul class="nav navbar-nav navbar-right">
