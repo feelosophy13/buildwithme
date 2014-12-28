@@ -69,7 +69,7 @@ class likeDAO:
             like_records_cursor = self.likes.find({'p':permalink}, {'u':1, '_id':0})
             likerIDs = []
             for record in like_records_cursor:
-                likerIDs.append(str(record['u']))
+                likerIDs.append(record['u'])
             return likerIDs
         except:
             print "Unexpected error on get_likerIDs:", sys.exc_info()[0]

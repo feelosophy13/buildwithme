@@ -63,7 +63,7 @@ class sessionDAO:
         return random_string
 
 
-    def edit_user_firstname(self, userID, firstname):
+    def update_user_firstname(self, userID, firstname):
         userID = bson.objectid.ObjectId(userID)
         try:
             update_status = self.sessions.update({'u':userID}, {'$set':{'f':firstname}}, multi = True)

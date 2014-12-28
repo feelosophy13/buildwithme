@@ -1,16 +1,17 @@
 %rebase("base.tpl")
 
-<h1>Manage Your Ideas</h1>
+<h1>Manage Posts</h1>
 <hr />
 
-%if summaries:
+%if post_summaries:
+	<h3>My Ideas</h3>
 	<table class="table table-striped">
 		<tr>
-			<th>Date</th>
+			<th width="250px">Date</th>
 			<th>Title</th>
-			<th>Action</th>
+			<th width="200px">Action</th>
 		</tr>
-		%for summary in summaries:			
+		%for summary in post_summaries:			
 			<tr>
 				<td>{{summary['t']}}</td>
 				<td><a href="/post/{{summary['p']}}">{{summary['s']}}</a></td>
@@ -18,53 +19,23 @@
 			</tr>
 		%end
 	</table>
+	<hr />
 %end
 
-<hr />
-
-
-<h3>Option 1</h3>
-<table class="table table-hover">
-	<tr class="active">
-		<td>
-			HELLO
-		</td>
-		<td>
-			MUCH
-		</td>
-	</tr>
-	<tr class="success">
-		<td>
-			Hello
-		</td>
-		<td>
-			Much
-		</td>
-	</tr>
-	<tr class="warning">
-		<td>
-			Hello
-		</td>
-		<td>
-			Much
-		</td>
-	</tr>
-	<tr class="danger">
-		<td>
-			Hello
-		</td>
-		<td>
-			Much
-		</td>
-	</tr>
-	<tr class="info">
-		<td>
-			Hello
-		</td>
-		<td>
-			Much
-		</td>
-	</tr>
-</table>
-
-
+%if feedback_summaries:
+	<h3>My Feedbacks</h3>
+	<table class="table table-striped">
+		<tr>
+			<th width="250px">Date</th>
+			<th>Post Link</th>
+			<th width="200px">Action</th>
+		</tr>
+		%for summary in feedback_summaries:
+			<tr>
+				<td>{{summary['t']}}</td>
+				<td><a href="/post/{{summary['p']}}">{{summary['p']}}</a></td>
+				<td><a href="/edit_feedback/{{summary['_id']}}">Edit</a> | <a href="/delete_feedback/{{summary['_id']}}">Delete</a></td>
+			</tr>
+		%end
+	</table>
+%end

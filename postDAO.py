@@ -16,34 +16,32 @@ class postDAO:
         self.posts = database.posts
 
 
-    def insert_entry(self, post):
+    def insert_post(self, post):
         try:
             self.posts.insert(post)
             return True
         except:
-            print "Unexpected error on insert_entry:", sys.exc_info()[0]
+            print "Unexpected error on insert_post:", sys.exc_info()[0]
             return False
 
 
-    def update_entry(self, post):        
+    def update_post(self, post):        
         ## get original post entry and update timestamp
         orig_post = self.posts.find_one({'p':post['p']})
-        utc_timestamp = datetime.datetime.utcnow()
 
         ## import fields from  document 
         post['_id'] = orig_post['_id']  # postID
         post['p'] = orig_post['p']  # "p" for permalink
         post['fc'] = orig_post['fc']  # "fc" for feedback count
         post['lc'] = orig_post['lc']  # "lc" for like count
-        post['i'] = orig_post['i']  # "i" for interested users' userIDs, or likerIDs
-        post['t'] = utc_timestamp  # "t" for update timestamp in UTC
+        post['u'] = datetime.datetime.utcnow()  # "u" for update timestamp in UTC
 
         ## update the old post document with the new post
         try:
             self.posts.update({'_id':post['_id']}, post)
             return True
         except:
-            print "Unexpected error on insert_entry:", sys.exc_info()[0]
+            print "Unexpected error on update_post:", sys.exc_info()[0]
             return False
 
 
@@ -60,22 +58,118 @@ class postDAO:
             return False 
 
 
-    ## loads posts with basic information; excludes the body except summary (i.e. the fields for "problem", "solution", "monetization", and "marketing")
-    def get_posts_basic(self, n_posts, page_num, likeDAO):
-        n_posts_skip = (page_num - 1) * n_posts
-        cursor = self.posts.find({}, {'_id':1, 'a':1, 'b.s':1, 'p':1, 's':1, 'lc':1, 'fc':1, 'y':1, 'l':1}).sort('_id', direction=-1).skip(n_posts_skip).limit(n_posts)  # sort by date in descending order (recent posts first)
+    def get_posts(self, n_posts, page_num, likeDAO, mode = 'essential'):
+        n_posts_skip = (page_num - 1) * n_posts        
+        projection = {'_id':1, 'a':1, 'b.s':1, 'p':1, 's':1, 'lc':1, 'fc':1, 'y':1, 'l':1} if mode == 'essential' else None  # if mode is "essential", then the projection excludes the following body fields: "problem", "solution", "monetization", and "marketing"; else, it's set to return all the fields
+        cursor = self.posts.find({}, projection).sort('_id', direction=-1).skip(n_posts_skip).limit(n_posts)  # sort by date in descending order (recent posts first)
+        l = extract_posts_through_cursor(cursor, likeDAO)
+        return l
+    
+    
+    def get_postID_by_permalink(self, permalink):
+        try:
+            postID = self.posts.find_one({'p':permalink}, {'_id':1})
+            return postID
+        except:
+            print "Unexpected error on increment_feedback_count:", sys.exc_info()[0]
+            return False
+
+
+    def get_post_by_permalink(self, permalink, mode = 'essential'):
+        projection = {'_id':1, 'a':1, 'b.s':1, 'p':1, 's':1, 'lc':1, 'fc':1, 'y':1, 'l':1} if mode == 'essential' else None  # if mode is "essential", then the projection excludes the following body fields: "problem", "solution", "monetization", and "marketing"; else, it's set to return all the fields
+        post = self.posts.find_one({'p':permalink}, projection)
+        if post is not None:
+            utc_timestamp = post['_id'].generation_time
+            pt_formatted = convert_utc_to_formatted_pt(utc_timestamp)
+            post['t'] = pt_formatted
+            # post['pd'] = extract_preview_description(body = post['b'], n_words = 30, n_chars = 240)
+            if 'l' not in post:
+                post['l'] = []
+            if 'y' not in post:
+                post['y'] = ''
+        return post
+        
+
+    def get_posts_by_tag(self, tag, likeDAO, num_posts = 'all', mode = 'essential'):
+        projection = {'_id':1, 'a':1, 'b.s':1, 'p':1, 's':1, 'lc':1, 'fc':1, 'y':1, 'l':1} if mode == 'essential' else None  # if mode is "essential", then the projection excludes the following body fields: "problem", "solution", "monetization", and "marketing"; else, it's set to return all the fields
+        if num_posts == 'all':
+            cursor = self.posts.find({'l': tag}, projection).sort('_id', direction = -1)
+        else:
+            cursor = self.posts.find({'l':tag}, projection).sort('_id', direction = -1).limit(num_posts)
         l = extract_posts_through_cursor(cursor, likeDAO)
         return l
 
-    
-    ## loads posts with complete information
-    def get_posts_complete(self, n_posts, page_num, likeDAO):
-        n_posts_skip = (page_num - 1) * n_posts
-        cursor = self.posts.find().sort('_id', direction=-1).skip(n_posts_skip).limit(n_posts)  # sort by date in descending order (recent posts first)
+
+    def get_posts_by_userID(self, userID, likeDAO, mode = 'essential'):
+        userID = bson.objectid.ObjectId(userID)
+        projection = {'_id':1, 'a':1, 'b.s':1, 'p':1, 's':1, 'lc':1, 'fc':1, 'y':1, 'l':1} if mode == 'essential' else None  # if mode is "essential", then the projection excludes the following body fields: "problem", "solution", "monetization", and "marketing"; else, it's set to return all the fields
+        cursor = self.posts.find({'a.u': userID}, projection).sort('_id', direction = -1)
         l = extract_posts_through_cursor(cursor, likeDAO)
         return l
+        
+
+    def get_post_summaries_by_userID(self, userID):
+        userID = bson.objectid.ObjectId(userID)
+        try:
+            cursor = self.posts.find({'a.u':userID}, {'_id':1, 'p':1, 's':1})  # get permalink, title, timestamp
+            l = []
+            for summary in cursor:
+                utc_timestamp = summary['_id'].generation_time
+                pt_formatted = convert_utc_to_formatted_pt(utc_timestamp)
+                summary['t'] = pt_formatted
+                l.append(summary)
+            return l
+        except:
+            print "Unexpected error on get_post_summaries_by_userID:", sys.exc_info()[0]
+            return None
+
     
+    def increment_feedback_count(self, permalink):
+        try:
+            update_status = self.posts.update({'p': permalink}, {'$inc': {'fc': 1}})
+            return update_status['nModified'] > 0
+        except:
+            print "Unexpected error on increment_feedback_count:", sys.exc_info()[0]
+            return False
+
+            
+    def decrement_feedback_count(self, permalink):
+        try: 
+            update_status = self.posts.update({'p': permalink}, {'$inc': {'fc': -1}})
+            return update_status['nModified'] > 0
+        except:
+            print "Unexpected error on decrement_feedback_count:", sys.exc_info()[0]
+            return False
+        
+ 
+    def increment_likes_count(self, permalink):
+        try: 
+            update_status = self.posts.update({'p': permalink}, {'$inc': {'lc': 1}})
+            return update_status['nModified'] > 0
+        except:
+            print "Unexpected error on increment_likes_count:", sys.exc_info()[0]
+            return False
+
+
+    def decrement_likes_count(self, permalink):
+        try: 
+            update_status = self.posts.update({'p': permalink}, {'$inc': {'lc': -1}})
+            return update_status['nModified'] > 0
+        except:
+            print "Unexpected error on decrement_likes_count:", sys.exc_info()[0]
+            return False
+            
     
+    def update_author_firstname(self, userID, firstname):
+        userID = bson.objectid.ObjectId(userID)
+        try:
+            update_status = self.posts.update({'a.u':userID}, {'$set':{'a.f':firstname}}, multi = True)
+            return update_status['nModified'] > 0
+        except:
+            print "Unexpected error on update_author_firstname:", sys.exc_info()[0]
+            return False
+
+            
     # determine if next_page_exists (next page exists if there are more previous posts)    
     def next_page_exists(self, n_posts_per_page, page_num):
         n_posts_skip = n_posts_per_page * page_num
@@ -94,103 +188,4 @@ class postDAO:
     def previous_page_exists(self, page_num):
         return page_num != 1
 
-        
-    def get_post_by_permalink(self, permalink):        
-        post = self.posts.find_one({'p': permalink})
-        if post is not None:
-            utc_timestamp = post['_id'].generation_time
-            pt_formatted = convert_utc_to_formatted_pt(utc_timestamp)
-            post['t'] = pt_formatted
-            # post['pd'] = extract_preview_description(body = post['b'], n_words = 30, n_chars = 240)
-            if 'l' not in post:
-                post['l'] = []
-            if 'y' not in post:
-                post['y'] = ''
-            if 'i' not in post:
-                post['i'] = []
-        return post
-        
-    
-    def get_post_by_permalink_basic(self, permalink):
-        
 
-
-    def get_post_summaries_by_userID(self, userID):
-        userID = bson.objectid.ObjectId(userID)
-        try:
-            cursor = self.posts.find({'a.u':userID}, {'_id':1, 'p':1, 's':1})  # get permalink, title, timestamp
-            l = []
-            for summary in cursor:
-                utc_timestamp = summary['_id'].generation_time
-                pt_formatted = convert_utc_to_formatted_pt(utc_timestamp)
-                summary['t'] = pt_formatted
-                l.append(summary)
-            return l
-        except:
-            print "Unexpected error on get_post_summaries_by_userID:", sys.exc_info()[0]
-            return None
-
-
-    def get_posts_by_tag(self, tag, likeDAO, num_posts = 'all'):
-
-        if num_posts == 'all':
-            cursor = self.posts.find({'l': tag}, {'_id':1, 'a':1, 'b.s':1, 'p':1, 's':1, 'lc':1, 'fc':1, 'y':1, 'l':1}).sort('_id', direction = -1)
-        else:
-            cursor = self.posts.find({'l':tag}, {'_id':1, 'a':1, 'b.s':1, 'p':1, 's':1, 'lc':1, 'fc':1, 'y':1, 'l':1}).sort('_id', direction = -1).limit(num_posts)
-        l = extract_posts_through_cursor(cursor, likeDAO)
-        return l
-
-
-    def get_posts_by_userID(self, userID, likeDAO):
-        userID = bson.objectid.ObjectId(userID)
-        cursor = self.posts.find({'a.u': userID}).sort('_id', direction = -1)
-        l = extract_posts_through_cursor(cursor, likeDAO)
-        return l
-        
-    
-    def increment_feedback_count(self, permalink):
-        try:
-            self.posts.update({'p': permalink}, {'$inc': {'fc': 1}})
-            return True
-        except:
-            print "Unexpected error on increment_feedback_count:", sys.exc_info()[0]
-            return False
-
-            
-    def decrement_feedback_count(self, permalink):
-        try: 
-            self.posts.update({'p': permalink}, {'$dec': {'fc': 1}})
-            return True
-        except:
-            print "Unexpected error on decrement_feedback_count:", sys.exc_info()[0]
-            return False
-        
- 
-    def increment_likes_count(self, permalink):
-        try: 
-            self.posts.update({'p': permalink}, {'$inc': {'lc': 1}})
-            return True
-        except:
-            print "Unexpected error on increment_likes_count:", sys.exc_info()[0]
-            return False
-
-
-    def decrement_likes_count(self, permalink):
-        try: 
-            self.posts.update({'p': permalink}, {'$inc': {'lc': -1}})
-            return True
-        except:
-            print "Unexpected error on decrement_likes_count:", sys.exc_info()[0]
-            return False
-            
-    
-    def edit_author_firstname(self, userID, firstname):
-        userID = bson.objectid.ObjectId(userID)
-        try:
-            update_status = self.posts.update({'a.u':userID}, {'$set':{'a.f':firstname}}, multi = True)
-            return update_status['nModified'] > 0
-        except:
-            print "Unexpected error on edit_author_firstname:", sys.exc_info()[0]
-            return False
-
-            

@@ -12,26 +12,36 @@ class feedbackDAO:
         self.feedbacks = self.db.feedbacks
     
 
-    def insert_feedback(self, permalink, feedbackByFirstName, feedbackByUserID, feedbackContent):
-        feedback = {'p': permalink, 
-                    'a': {'f': feedbackByFirstName, 'u': feedbackByUserID},
-                    'b': feedbackContent}
+    def insert_feedback(self, feedback):
         try:
             self.feedbacks.insert(feedback)
             return True
         except:
-            print "Error inserting post"
-            print "Unexpected error:", sys.exc_info()[0]
-            bottle.redirect('/internal_error')
+            print "Unexpected error on insert_feedback:", sys.exc_info()[0]
+            return False
     
     
-    def edit_feedback(self, permalink, feedbackByFirstName, feedbackByUserID, feedbackContent):
-        pass
-        
-        
+    def update_feedback(self, feedback):
+        try:
+            update_status = self.posts.update({'_id':feedback['_id']}, feedback)
+            return update_status['nModified'] > 0
+        except:
+            print "Unexpected error on update_feedback:", sys.exc_info()[0]
+            return False
+
+
     def remove_feedback(self, permalink, feedbackByFirstName, feedbackByUserID):
         pass
+
         
+    def remove_feedbacks_for_post(self, permalink):
+        try:
+            self.feedbacks.remove({'p': permalink})
+            return True
+        except:
+            print "Unexpected error on remove_feedbacks_for_post:", sys.exc_info()[0]
+            return False
+    
    
     def get_feedbacks_by_permalink(self, permalink, n_feedbacks = 'all'):
         if n_feedbacks == 'all':
@@ -39,36 +49,45 @@ class feedbackDAO:
         else:
             cursor = self.feedbacks.find({'p': permalink}).sort('_id', direction=-1).limit(n_feedbacks)  # sort by date in descending order (recent posts first)
         l = []
-        for post in cursor:
-            utc_timestamp = post['_id'].generation_time  # naive datetime instance (contains no timezone info in the object)
-            pt_timestamp_formatted = convert_utc_to_formatted_pt(utc_timestamp)
-            post['t'] = pt_timestamp_formatted  # replace the naive datetime instance with a new timestamp in Pacific Time
-                            
-            l.append({'p': post['p'],  # parent post permalink
-                      'b': post['b'],  # feedback body
-                      'a': post['a'],  # feedback author
-                      })
+        for feedback in cursor:
+            utc_timestamp = feedback['_id'].generation_time  # naive datetime instance (contains no timezone info in the object)
+            pt_formatted = convert_utc_to_formatted_pt(utc_timestamp)
+            feedback['t'] = pt_formatted  # replace the naive datetime instance with a new timestamp in Pacific Time
+            l.append(feedback)
         return l
 
 
-    def edit_user_firstname(self, userID, firstname):
+    def get_feedback_by_feedbackID(self, feedbackID):
+        feedbackID = bson.objectid.ObjectId(feedbackID)
+        try:
+            feedback = self.feedbacks.find_one({'_id':feedbackID})
+            return feedback
+        except:
+            print "Unexpected error on get_feedback_by_feedbackID:", sys.exc_info()[0]
+            return None
+        
+
+    def update_user_firstname(self, userID, firstname):
         userID = bson.objectid.ObjectId(userID)
         try:
             update_status = self.feedbacks.update({'a.u':userID}, {'$set':{'a.f':firstname}}, multi = True)
             return update_status['nModified'] > 0
         except:
-            print "Unexpected error on edit_author_firstname:", sys.exc_info()[0]
+            print "Unexpected error on update_author_firstname:", sys.exc_info()[0]
             return False
 
 
-
-"""
-e.g. feedback JSON document
-{
-'_id': 1,  # feedbackID
-'post_ID': 123,  // postID
-'feedback_by': { "id" :  <authorId>, "fname" :  "Howard", "lname": "Song"},
-'feedback': 'This is a great idea!',
-'timestamp_updated': '2014-08-10-12-32-33'
-}
-"""
+    def get_feedback_summaries_by_userID(self, userID):
+        userID = bson.objectid.ObjectId(userID)
+        try:
+            cursor = self.feedbacks.find({'a.u':userID}, {'_id':1, 'p':1})  # get permalink and postID (timestamp)
+            l = []
+            for summary in cursor:
+                utc_timestamp = summary['_id'].generation_time
+                pt_formatted = convert_utc_to_formatted_pt(utc_timestamp)
+                summary['t'] = pt_formatted
+                l.append(summary)
+            return l
+        except:
+            print "Unexpected error on get_feedback_summaries_by_userID:", sys.exc_info()[0]
+            return None

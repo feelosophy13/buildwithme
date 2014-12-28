@@ -7,8 +7,7 @@ import pymongo
 import bson
 import datetime
 
-from helpers import validate_email
-
+from helpers import validate_email, make_rand_str
 
 ## The User Data Access Object handles all interactions with the User collection.
 class userDAO:
@@ -107,27 +106,27 @@ class userDAO:
             return None, None
     
 
-    def add_user(self, emailID, firstname, lastname, password, signup_conf_str):  # email has already been validated at this point
-        password_hash = self.make_pw_hash(password)  # hash the password
-        user = self.users.find_one({'e':emailID})  # find user by email ID
-        if user is None:  # if no one else has the same email ID            
-            user = {'e': emailID, 
-                    'f': firstname, 
-                    'l': lastname, 
-                    'p': password_hash, 
-                    'c': signup_conf_str}
-            try:
-                self.users.insert(user)
-                user = self.users.find_one({'e': emailID})
-                return user['_id']
-            except pymongo.errors.OperationFailure:  # mongo error
-                print "Unexpected error on add_user:", sys.exc_info()[0]
-                return False
-        else:  # if there is another user with that email ID, then return False
+    def insert_user(self, user):  # everything has already been validated at this point (including for duplicate email ID)
+        
+        ## user JSON contains raw password which must be replaced with a hashed password
+        password_hash = self.make_pw_hash(user['p'])
+        user['p'] = password_hash
+        
+        ## user JSON does not contain signup confirmation string, which must be inserted before getting saved in the database
+        signup_conf_str = make_rand_str(32)
+        user['c'] = signup_conf_str  # "c" for signup confirmation string
+                
+        try:
+            self.users.insert(user)
+            return signup_conf_str
+        except pymongo.errors.OperationFailure:
+            print "Unexpected error on add_user:", sys.exc_info()[0]
             return False
 
 
-    def edit_user_info(self, userID, firstname, lastname, bio, birthYear, links, zip, gender):
+XXX FIX THIS UP!!
+    def update_user(self, userID, firstname, lastname, bio, birthYear, links, zip, gender):
+
         userID = bson.objectid.ObjectId(userID)
         emailID, password = self.get_emailID_and_password(userID)
         # password = self.get_password(userID)
@@ -164,10 +163,10 @@ class userDAO:
             self.users.update({'_id': userID}, user)
             return True
         except:
-            print "Unexpected error on edit_user_info:", sys.exc_info()[0]
+            print "Unexpected error on update_user_info:", sys.exc_info()[0]
             return False
 
-       
+XXXX FIX THIS UP
     def get_user(self, userID):
         userID = bson.objectid.ObjectId(userID)        
         try:

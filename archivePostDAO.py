@@ -1,8 +1,4 @@
 import sys
-import pytz
-import bson
-import time
-import datetime
 
 
 ## The Archive Post Data Access Object handles interactions with the Archive Posts collection
@@ -14,26 +10,14 @@ class archivePostDAO:
         self.archive_posts = database.archive_posts
         
     
-    def insert_entry(self, removal_post):
-        
-        
-
-
-        # build a new post (required fields)
-        post = {"p": permalink,  # "p" for permalink
-                "a": {'u': userID, 'f': firstname},  # "a" for author; "u" for userID; "f" for first name
-                "s": title,  # "s" for subject
-                "b": postContent,  # "b" for body
-                "fc": 0,  # "fc" for feedback count
-                "lc": 0  # "lc" for like count
-                }
-        
-        # insert the post
-        try:
-            self.posts.insert(post)
-            return True
-        except:
-            print "Unexpected error on insert_entry:", sys.exc_info()[0]
+    def insert_archive_post_entry(self, archive_post):
+        dupe_archive_post = self.archive_posts.find_one({'_id': archive_post['_id']})
+        if dupe_archive_post:
             return False
-
-        return permalink
+        else:       
+            try:
+                self.archive_posts.insert(archive_post)
+                return True
+            except:
+                print "Unexpected error on insert_archive_post_entry:", sys.exc_info()[0]
+                return False

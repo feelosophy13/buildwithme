@@ -96,7 +96,7 @@
 			<p class="lead">
 			1. You get a chance to test the demand.<br />
 			2. You receive tons of community feedback.<br />
-			3. You won't have to pay hefty sum to hire developers (if selected).<br />
+			3. You won't have to pay hefty sum to hire developers if your idea gets selected.<br />
 			</p>
 			<br />
 
@@ -120,7 +120,7 @@
 			
 			<h3>How many likes do I need for my idea to get selected?</h3>
 			<p class="lead">
-			We try to select the most popular ideas in the top 10% range. We will occasionally select ideas that are not in the bracket if we believe that there is a good potential. Though rarely, we may also drop popular ideas.
+			We try to select the most popular ideas in the top 10% range. We will occasionally select ideas that are not in that bracket if we believe that there is a good potential. Though rarely, we may also drop ideas from popular votes.
 			</p>
 			
 			<h3></h3>
